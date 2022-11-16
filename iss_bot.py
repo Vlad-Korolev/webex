@@ -1,170 +1,258 @@
 
+# Запросы
 import requests
+# Преобразование
 import json
+# Работа со временем
 import time
+# Использования файла для хранения параметров
 from configparser import ConfigParser 
+#
+import datetime
 
+
+# Объявляем переменную, необходимую для работы ConfigParser
 config = ConfigParser() 
+# Считываем данные с файла конфигурации
 config.read('config.ini')
 
+
+##############     Функции     ##############
 def webexCreateMessage(message):
     '''
-    Description
+    Функция "webexCreateMessage()" отправляет сообщения в чат комнаты Webex
+        Ф-ция ожидает в качестве аргумента сообщения webexCreateMessage(message), необходимое для отправки
     '''
-    # webex bot create message in room (messages from location ISS)
+
+    # Заголовок запроса
     HTTPHeaders = { 
           "Authorization": AccessTokenWebex,
           "Content-Type": "application/json"
     }
+    # Параметры запроса
     PostData = {
           "roomId": roomIdToGetMessages,
           "text": message
     }
+    # Запрос (post)
     r = requests.post(config.get('WEBEX', 'webexUrlMessagesPost'), 
                           data = json.dumps(PostData), 
                               headers = HTTPHeaders
     )
+  
 
 
-
-##############     CHFPTER 1      ##############
-# Webex Authentication 
-
+##############     Часть 1      ##############
+# Webex авторизация
+# Токен авторизации по умолчанию берется из файла конфигурации (действует 12 часов)
 AccessTokenWebex = config.get('WEBEX', 'AccessTokenWebex')
 
-print ('Use Default Webex token')
-choice = input("Enter new webex token (y/n) ")
+print ('Используется Токен Авторизации по умолчанию')
+
+# Возможность ввести новый Токен
+choice = input("Ввести новый Токен Авторизации (y/n) ")
 if choice == "Y" or choice == "y":
-    AccessTokenWebex = input("What is your access token?\n")
+    # После ввода нового токена добавляем его в файл конфигурации
+    AccessTokenWebex = input("Новый Токен Авторизации: ")
+    config.set('WEBEX', 'AccessTokenWebex',  AccessTokenWebex)
+    config.write(open('config.ini', "w"))
+
 AccessTokenWebex = "Bearer " + AccessTokenWebex
 
 
 
-##############     CHFPTER 2      ##############
-# Webex show rooms
+##############     Часть 2      ##############
+# Webex просмотр комнат пользователя
+# Запрос к API Webex для получения списка комнат
 r = requests.get(   config.get('WEBEX', 'webexUrlRooms'),
                     headers = {"Authorization": AccessTokenWebex}
                 )
 
-
+# При возвращении кода отличного от "200" скрипт в консоль выводит сообщения об ошибке
 if not r.status_code == 200:
-    raise Exception("Incorrect reply from Webex Teams API. Status code: {}. Text: {}".format(r.status_code, r.text))
+    raise Exception("Некорректный запрос к Webex Teams API. Статус код: {}. Сообщение: {}".format(r.status_code, r.text))
 
-
-# Webex print rooms
-print("\nList of Rooms:")
+# Выводим в консоль список комнат пользователя
+print("\nКомнаты:")
 rooms = r.json()["items"]
 
 for i in range(len(rooms)):
     print(i, '-', rooms[i]['title'])
 else:
-    print('Total rooms: ' + str(len(rooms)))
+    print('Всего комнат: ' + str(len(rooms)))
 
-
-##############     CHFPTER 3     ##############
-# Webex chose room 
+# Пользователь выбирает комнату из списка (в которой чат будет "прослушиваться")
 while True:
-    roomNumberToSearch = int(input("\nRoom number: ")) 
+    roomNumberToSearch = input("\nВыберите № комнаты для работы скрипта: ") 
+    # Обработчик исключений, првоеряем правильность ввода ЦИФРЫ номера комнаты
+    try:
+        roomNumberToSearch = int(roomNumberToSearch)
+        # Проверяем на парвильность выбора комнаты (существует такой номер комнаты или нет)
+        if  roomNumberToSearch >= 0 and roomNumberToSearch < len(rooms):
+            # Сохраняем в переменную id выбранной команты (id нужен для запросов)
+            roomIdToGetMessages = rooms[roomNumberToSearch]["id"]
+            roomTitleToGetMessages = rooms[roomNumberToSearch]["title"]
+            print("Выбрана комната : " + roomTitleToGetMessages)
+            print("Id комнаты : " + roomIdToGetMessages + '\n')
+            break
+        # Вариант с несуществующим номером комнаты
+        else:
+            print("Ошибка, нету такого номера комнаты")
+            print("Введите номер команты повторно...")
+    # Обрабатываем исключение с неверным воодом (например: буквы)        
+    except ValueError:
+        print("Введено недопустимое значение.")
+        print("Необходимо ввести цифру номера комнаты.") 
 
-    if roomNumberToSearch >= 0 and roomNumberToSearch < len(rooms):
-        roomIdToGetMessages = rooms[roomNumberToSearch]["id"]
-        roomTitleToGetMessages = rooms[roomNumberToSearch]["title"]
-        print("Select room : " + roomTitleToGetMessages)
-        print("Id room : " + roomIdToGetMessages + '\n')
-        break
-    else:
-        print("Sorry, I didn't find any room.")
-        print("Please try again...")
 
 
-##############     CHFPTER 4     ##############
-# Webex bot (listen)
+##############     Часть 3     ##############
+# Скрипт "прсолушивает" чат выбранной комнаты Webex
 while True:
+    # выполнятсья каждую секунду
     time.sleep(1)
+
+    # Параметры для запроса на наличие сообщений в чате комнаты
     GetParameters = {
                             "roomId": roomIdToGetMessages,
-                            "max": 1 #max_message
+                            "max": 1 # Макисмальное число сообщений
                     }
-
-
                     
-# Webex bot show messages
+    # Запрос (GET) в комнату Webex для получения списка сообщений
     r = requests.get(config.get('WEBEX', 'webexUrlMessages'), 
                          params = GetParameters, 
                          headers = {"Authorization": AccessTokenWebex}
                     )
 
+    # При возвращении кода отличного от "200" скрипт в консоль выводит сообщения об ошибке
     if not r.status_code == 200:
-        raise Exception( "Incorrect reply from Webex Teams API. Status code: {}. Text: {}".format(r.status_code, r.text))
+        raise Exception("Некорректный запрос к Webex Teams API. Статус код: {}. : {}".format(r.status_code, r.text))
     
+    # Преобразуем полученный ответ к удробному отображению
     json_data = r.json()
+
+    # Условие, вернул ли запрос сообщение (или их нет)
     if len(json_data["items"]) == 0:
-        raise Exception("There are no messages in the room.")
+        raise Exception("В комнате нету ни одного сообщения")
     
+    # Переменная для хранения всего ответа
     messages = json_data["items"]
+    # Текст сообщения
     message = messages[0]["text"]
-    print("Last message: " + message)
+    # ID пользователя оставившего сообщение
+    personID = messages[0]["personId"] 
+
+    # Параметры для запроса (описание пользователя оставившего последнее сообщение)
+    GetParameters = {
+                            "id": personID,
+                            "max": 1 
+                    }
+                    
+    # Запрос (GET) для получения информации о пользователе по его Id (полученному из последнего сообщения)
+    r = requests.get(config.get('WEBEX', 'webexurlpeople'), 
+                         params = GetParameters, 
+                         headers = {"Authorization": AccessTokenWebex}
+                    )
+
+    # При возвращении кода отличного от "200" скрипт в консоль выводит сообщения об ошибке
+    if not r.status_code == 200:
+        raise Exception("Некорректный запрос к Webex Teams API. Статус код: {}. Сообщение: {}".format(r.status_code, r.text))
     
- # Webex bot found a match  
-    if message.find("/Help") == 0:
-        responseMessage = '*************************************\n' + '/ISS - show location ISS\n' + '/ISS_crew - show ISS crew\n' + '*************************************' 
-        webexCreateMessage(responseMessage)
+    # Преобразуем полученный ответ к удобному отображению
+    json_data = r.json()
+    # Переменная для хранения всего ответа
+    people = json_data['items'] 
+    # Переменная для хранения имени пользователя
+    people_name = people[0]['displayName']
 
-    
-    elif message.find("/ISS_crew") == 0:
-        # iss request (crew)
-        r_iss_crew = requests.get(config.get('ISS', 'issUrlCrew'))
-        r_iss_crew_json = r_iss_crew.json()['people']
+    # Выводим в консоль последнее сообщение в чате комнаты
+    # Переменная для хранения текущей даты (времени)
+    now = datetime.datetime.now()
+    # Строка с сообщением
+    last_message  = f'[{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] сообщение:\n{message}' 
+    print(last_message)
 
-        crew = ''
-        for crew_numb in range(len(r_iss_crew_json)):
-            crew = crew + r_iss_crew_json[crew_numb]['name'] + '\n'
-
-        webexCreateMessage('How many humans are in space right now?')
-
-        responseMessage = crew
-        webexCreateMessage(responseMessage)
  
+
+    ##############     Часть 4     ##############
+    # Скрипт "прсолушивает" чат и находит совпадения сообщений
+    
+    if message.find("/Help") == 0:
+
+        s1 = '***************************************'
+        s2 = '/ISS - Просмотр местоположения МКС'
+        s3 = '/ISS_crew - Просмотр экипажа на МКС'
+
+        responseMessage = f'\n{s1}\n{s2}\n{s3}\n'
+        # Ф-ция для запроса (post) на печать сообщения в чат
+        webexCreateMessage(responseMessage)
+
+    elif message.find("/ISS_crew") == 0:
+
+        # Выполняем запрос к "open-notify" для получения списка экпижа на МКС
+        r = requests.get(config.get('ISS', 'issUrlCrew'))
+        json_data = r.json()['people']
+
+        # Проходим циклом по полученным сведениям и записываем всех членов экипажа в строку
+        crew = ''
+        for crew_numb in range(len(json_data)):
+            crew = crew + json_data[crew_numb]['name'] + '\n'
+
+        # Ф-ция для запроса (post) на печать сообщения в чат
+        webexCreateMessage('Сколько людей сейчас находится в космосе?\n')
+        webexCreateMessage(crew)
 
     elif message.find("/ISS") == 0:
 
-        # iss request (location, coordinates)
-        r_iss = requests.get(config.get('ISS', 'issUrl'))
-        r_iss_json = r_iss.json()['iss_position']
-        coordinates_iss = r_iss_json['latitude'] + ',' + r_iss_json['longitude']
+        # Выполняем запрос к "open-notify" для получения координат местоположения МКС в текущий момент
+        r = requests.get(config.get('ISS', 'issUrl'))
 
+        # Преобразуем полученный ответ к удобному отображению
+        json_data = r.json()['iss_position']
+        # Записываем в переменную полученные координаты МКС
+        coordinates_iss = f"{json_data['latitude']},{json_data['longitude']}"
 
-        # MapQuest request (geocoding)
-        AccessTokenWebexMapQuest = config.get('MAPQUEST', 'AccessTokenWebexMapQuest') 
-
-        url = config.get('MAPQUEST', 'mapQuesUrl') 
+        # Выполняем запрос к "MapQuest" по полученным координатам МКС, вычисляем над какой она страной, городом, улицей (геокодинг)
         headers = {'Content-Type': 'application/json'}
-        params = {'location': coordinates_iss, 'key': AccessTokenWebexMapQuest}
+        params = {
+                    'location': coordinates_iss, 
+                    'key': config.get('MAPQUEST', 'AccessTokenMapQuest')     
+                 }
+        r = requests.get(config.get('MAPQUEST', 'mapQuesUrl'), headers=headers, params=params)
 
-        res = requests.get(url, headers=headers, params=params)
-        res_json = res.json()['results'][0]['locations'][0]
+        # Преобразуем полученный ответ к удобному отображению
+        json_data = r.json()['results'][0]
+        mapQuest = json_data['locations'][0]
 
-        print(json.dumps(res_json, indent=4))
-        
-        if res_json['adminArea1'] != '':
-            webexCreateMessage('The ISS is moving at close to 28,000 km/h so its location changes really fast! Where is it right now?')
+        mapQuest_Country = mapQuest['adminArea1']
+        mapQuest_City = mapQuest['adminArea5']
+        mapQuest_Street = mapQuest['street']
 
-            responseMessage = '''
-ISS coordinates:  {coordinates}
-*************************************
-Country:  {country}
-City:  {city}
-Street:  {street}
-*************************************
-'''.format(coordinates = coordinates_iss, country = res_json['adminArea1'], city = res_json['adminArea5'], street=res_json['street'])
+        # Проверка сообщения на пустую страну (Если она пустая, МКС пролетает над нейтральными землями (водами))
+        if mapQuest_Country != '':
+
+            # Ф-ция для запроса (post) на печать сообщения в чат
+            webexCreateMessage('\nМКС движется со скоростью, близкой к 28 000 км / ч, поэтому ее местоположение меняется очень быстро! Где он находится прямо сейчас?')
+
+            s1 = f'Координаты МКС:  {coordinates_iss}'
+            s2 = '***************************************'
+            s3 = f'Страна:    {mapQuest_Country}'
+            s4 = f'Город:     {mapQuest_City}'
+            s5 = f'Улица:     {mapQuest_Street}'
+            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}'
+            # Ф-ция для запроса (post) на печать сообщения в чат
             webexCreateMessage(responseMessage)
+
         else:
-            responseMessage = 'The ISS is moving at close to 28,000 km/h so its location changes really fast! Where is it right now?'
-            webexCreateMessage(responseMessage)
+            # Ф-ция для запроса (post) на печать сообщения в чат
+            webexCreateMessage('\nМКС движется со скоростью, близкой к 28 000 км/ч, поэтому ее местоположение меняется очень быстро! Где он находится прямо сейчас?')
 
-            responseMessage = '\nISS coordinates:  ' + coordinates_iss + '\n' + '*************************************\n' + 'ISS Location: Neutral Earth/Water\n' + '*************************************\n' 
+            s1 = f'Координаты МКС:  {coordinates_iss}'
+            s2 = '*****************************************************'
+            s3 = f'Местонахождение МКС: Нейтральные воды (земли)'
+            responseMessage = f'\n{s1}\n{s2}\n{s3}\n'
+            # Ф-ция для запроса (post) на печать сообщения в чат
             webexCreateMessage(responseMessage)
-
             
 
 
