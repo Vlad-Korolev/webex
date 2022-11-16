@@ -1,4 +1,3 @@
-
 # Запросы
 import requests
 # Преобразование
@@ -7,7 +6,7 @@ import json
 import time
 # Использования файла для хранения параметров
 from configparser import ConfigParser 
-#
+# Получение даты и времени
 import datetime
 
 
@@ -83,7 +82,7 @@ else:
 
 # Пользователь выбирает комнату из списка (в которой чат будет "прослушиваться")
 while True:
-    roomNumberToSearch = input("\nВыберите № комнаты для работы скрипта: ") 
+    roomNumberToSearch = input("\nВыберите номер комнаты для работы скрипта: ") 
     # Обработчик исключений, првоеряем правильность ввода ЦИФРЫ номера комнаты
     try:
         roomNumberToSearch = int(roomNumberToSearch)
@@ -203,6 +202,8 @@ while True:
         webexCreateMessage(crew)
 
     elif message.find("/ISS") == 0:
+        # Ф-ция для запроса (post) на печать сообщения в чат
+        webexCreateMessage('\nМКС движется со скоростью, близкой к 28 000 км / ч, поэтому ее местоположение меняется очень быстро! Где он находится прямо сейчас?')
 
         # Выполняем запрос к "open-notify" для получения координат местоположения МКС в текущий момент
         r = requests.get(config.get('ISS', 'issUrl'))
@@ -212,47 +213,69 @@ while True:
         # Записываем в переменную полученные координаты МКС
         coordinates_iss = f"{json_data['latitude']},{json_data['longitude']}"
 
-        # Выполняем запрос к "MapQuest" по полученным координатам МКС, вычисляем над какой она страной, городом, улицей (геокодинг)
-        headers = {'Content-Type': 'application/json'}
-        params = {
-                    'location': coordinates_iss, 
-                    'key': config.get('MAPQUEST', 'AccessTokenMapQuest')     
-                 }
-        r = requests.get(config.get('MAPQUEST', 'mapQuesUrl'), headers=headers, params=params)
+        # Выполняем запрос к "OPENCAGEDATA" по полученным координатам МКС, вычисляем над какой она страной, городом, улицей (геокодинг)
+        GetParameters = {
+                              "key": config.get('OPENCAGEDATA', 'accesstokenopencagedata'), # Токен доступа
+                                "q": coordinates_iss, # Координаты МКС
+                         "language": 'ru' # Язык ответа
+                        }
+                                
+        r = requests.get(config.get('OPENCAGEDATA', 'opencagedataurl'), 
+                         params = GetParameters, 
+                        )
 
         # Преобразуем полученный ответ к удобному отображению
-        json_data = r.json()['results'][0]
-        mapQuest = json_data['locations'][0]
+        json_data = r.json()
+        # Записываем в переменную полученный ответ
+        result = json_data['results'][0]
+        # Записываем в переменную категорию (от нее зависят возвращаемые данные)
+        opencagedata_category = result['components']['_category']
 
-        mapQuest_Country = mapQuest['adminArea1']
-        mapQuest_City = mapQuest['adminArea5']
-        mapQuest_Street = mapQuest['street']
+        # Выстраиваем сообщения ответа в зависимости от категории "opencagedata_category"
+        if opencagedata_category == 'road' or opencagedata_category == 'place':
+            
+            # Записываем в переменные нужные нам значения
+            opencagedata_continent    = result['components']['continent']
+            opencagedata_country      = result['components']['country']
+            opencagedata_county       = result['components']['county']
+            opencagedata_state        = result['components']['state']
+            opencagedata_village      = result['components']['village']
 
-        # Проверка сообщения на пустую страну (Если она пустая, МКС пролетает над нейтральными землями (водами))
-        if mapQuest_Country != '':
-
-            # Ф-ция для запроса (post) на печать сообщения в чат
-            webexCreateMessage('\nМКС движется со скоростью, близкой к 28 000 км / ч, поэтому ее местоположение меняется очень быстро! Где он находится прямо сейчас?')
-
-            s1 = f'Координаты МКС:  {coordinates_iss}'
+            # Подгатавливаем сообщения для отправки в чат комнаты
+            s1 = f'Координаты МКС: {coordinates_iss}'
             s2 = '***************************************'
-            s3 = f'Страна:    {mapQuest_Country}'
-            s4 = f'Город:     {mapQuest_City}'
-            s5 = f'Улица:     {mapQuest_Street}'
-            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}'
+            s3 = f'Континент:      {opencagedata_continent}'
+            s4 = f'Страна:         {opencagedata_country}'
+            s5 = f'Округ:          {opencagedata_county}'
+            s6 = f'Область:        {opencagedata_state}'
+            s7 = f'Город:          {opencagedata_village}'
+
+            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}\n{s6}\n{s7}\n'
             # Ф-ция для запроса (post) на печать сообщения в чат
             webexCreateMessage(responseMessage)
+            
+        elif opencagedata_category == 'natural/water':
+            
+            # Записываем в переменные нужные нам значения
+            opencagedata_water = result['components']['body_of_water']
 
+            # Подгатавливаем сообщения для отправки в чат комнаты
+            s1 = f'Координаты МКС: {coordinates_iss}'
+            s2 = '***************************************'
+            s3 = f'Нейтралные территории (вода)'
+            s4 = f'Местоположение: { opencagedata_water}'
+
+            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n'
+            # Ф-ция для запроса (post) на печать сообщения в чат
+            webexCreateMessage(responseMessage)
+            
         else:
-            # Ф-ция для запроса (post) на печать сообщения в чат
-            webexCreateMessage('\nМКС движется со скоростью, близкой к 28 000 км/ч, поэтому ее местоположение меняется очень быстро! Где он находится прямо сейчас?')
+            webexCreateMessage('Неизвестная категория (opencagedata_category)')
+            webexCreateMessage(opencagedata_category)
+            webexCreateMessage(coordinates_iss)
 
-            s1 = f'Координаты МКС:  {coordinates_iss}'
-            s2 = '*****************************************************'
-            s3 = f'Местонахождение МКС: Нейтральные воды (земли)'
-            responseMessage = f'\n{s1}\n{s2}\n{s3}\n'
-            # Ф-ция для запроса (post) на печать сообщения в чат
-            webexCreateMessage(responseMessage)
+
+
             
 
 
