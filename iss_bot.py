@@ -225,7 +225,7 @@ while True:
     # Увеличиваем номер сообщений в логе
     log_count += 1
     # Строка с сообщением
-    last_message  = f'[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : {message}' 
+    last_message  = f'[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}]: {message}' 
     print(last_message)
 
  
@@ -287,34 +287,59 @@ while True:
         result = json_data['results'][0]
         # Записываем в переменную категорию (от нее зависят возвращаемые данные)
         opencagedata_category = result['components']['_category']
-       
+        opencagedata_osm   = result['annotations']['OSM']['url']
 
         # Выстраиваем сообщения ответа в зависимости от категории "opencagedata_category"
-        if opencagedata_category == 'road' or opencagedata_category == 'place':
-            
-            # Записываем в переменные нужные нам значения
-            opencagedata_continent    = result['components']['continent']
-            opencagedata_country      = result['components']['country']
-            opencagedata_state        = result['components']['state']
-            opencagedata_osm          = result['annotations']['OSM']['url']
+        if opencagedata_category != 'natural/water':
+            # Словарь для хранения элементов необходимых для вывода (инф. о стране, городе, области и т.п.)
+            showInf = dict() 
+
+            # В цикле перебираем весь полученный ответ (ветка 'components')
+            for key, value in result['components'].items():            
+
+                # Проходим по заранее известным словам, если в ответе API (ветка 'components') есть такие, то формируем из них слвоарь
+                if key == 'continent':
+                    showInf['Континент'] = value 
+                elif key == 'country':
+                    showInf['Страна'] = value 
+                elif key == 'county':
+                    showInf['Округ'] = value                 
+                elif key ==  'county':
+                    showInf['Округ'] = value                                 
+                elif key == 'state':
+                    showInf['Область'] = value                                 
+                elif key == 'city':
+                    showInf['Город'] = value                                                 
+                elif key == 'region':
+                    showInf['Регион'] = value
+
+            # Случай, когда в ответе API не нашлось ни одного совпадения с ключевыми словами (словарь "showInf" пуст)  
+            if len(showInf) == 0:
+                showInf['Ошибка'] ='Словарь с элементами для вывода не сформирован, не нашлось ни одного совпадения.'
 
             # Подгатавливаем сообщения для отправки в чат комнаты
             s1 = f'Координаты МКС: {coordinates_iss}'
             s2 = '***************************************'
-            s3 = f'Континент:      {opencagedata_continent}'
-            s4 = f'Страна:         {opencagedata_country}'
-            s5 = f'Область:        {opencagedata_state}'
-            s6 = f'\nПросмотр на карте: \n{opencagedata_osm}'
+            responseMessage = f'\n{s1}\n{s2}'
 
-            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}\n{s6}\n'
+            # В цикле проходим по составленному словарю "showInf" добавляем все элементы из него в сообщения для отправки в чат комнаты
+            for key, value in showInf.items():
+                string = f'\n{key}: {value}'
+                responseMessage = responseMessage + string
+            
+            # Добавляем к сообщению последнюю строку с выводом ссылки на карту (по полученным координатам)
+            sFinal = f'\n\nПросмотр на карте: \n{opencagedata_osm}'
+            responseMessage += sFinal
+
             # Ф-ция для запроса (post) на печать сообщения в чат
             webexCreateMessage(responseMessage)
             
+
         elif opencagedata_category == 'natural/water':
-            
+
             # Записываем в переменные нужные нам значения
             opencagedata_water = result['components']['body_of_water']
-            opencagedata_osm   = result['annotations']['OSM']['url']
+           
 
             # Подгатавливаем сообщения для отправки в чат комнаты
             s1 = f'Координаты МКС: {coordinates_iss}'
@@ -328,10 +353,8 @@ while True:
             webexCreateMessage(responseMessage)
             
         else:
-            # Ф-ция для запроса (post) на печать сообщения в чат
-            webexCreateMessage('Неизвестная категория (opencagedata_category)')
-            webexCreateMessage(opencagedata_category)
-            webexCreateMessage(coordinates_iss)
+            # Заглушка (проработать вариант с ошибкой)
+            pass
 
 
 
