@@ -68,8 +68,6 @@ def webexCreateRoom(title):
     if not r.status_code == 200:
         raise Exception("Некорректный запрос к Webex Teams API (Создание комнаты). Статус код: {}. : {}".format(r.status_code, r.text))
     
-    # Вызываем ф-цию для вывода нового списка комнат (после создания очередной комнаты)
-    webexShowRooms()
 
 def webexShowRooms():
     '''
@@ -95,42 +93,26 @@ def webexShowRooms():
     else:
         print('Всего комнат: ' + str(len(rooms)))
         print('Для создания комнаты выберите номер:', len(rooms))
+
+    # Возвращаем список комнат
+    return(rooms)
     
-    # Пользователь выбирает комнату из списка (в которой чат будет "прослушиваться")
-    while True:
-        roomNumberToSearch = input("\nВыберите номер комнаты для работы скрипта: ") 
 
-        # Обработчик исключений, првоеряем правильность ввода ЦИФРЫ номера комнаты
-        try:
-            roomNumberToSearch = int(roomNumberToSearch)
+def consoleMessage(titel, data):
+    '''
+    Функция "consoleMessage(titel, data)" печатае в консоле сообщение.
+        Ф-ция ожидает в качестве аргумента "title" - название и "data" - данные для вывода
+    '''
+    # Шаблон для вывода сообщений в консоль
+    s1 = '**********************************************************'
+    s2 = titel
+    s3 = '**********************************************************'
+    s4 = json.dumps(data, indent=4)
+    s5 = '=========================================================='
+    s_cancat = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}'
+    print(s_cancat)
 
-            # Проверяем на парвильность выбора комнаты (существует такой номер комнаты или нет)
-            if  roomNumberToSearch >= 0 and roomNumberToSearch < len(rooms):
-                # Сохраняем в переменную id выбранной команты (id нужен для запросов)
-                roomIdToGetMessages = rooms[roomNumberToSearch]["id"]
-                roomTitleToGetMessages = rooms[roomNumberToSearch]["title"]
-                print("Выбрана комната : " + roomTitleToGetMessages)
-                print("Id комнаты : " + roomIdToGetMessages + '\n')
-                break
-
-            # Создание новой комнаты
-            elif roomNumberToSearch == len(rooms):
-                print('Вы выбрали создание новой комнаты')
-                webexCreateRoom(input('Введите имя новой комнаты: '))
-
-            # Вариант с несуществующим номером комнаты
-            else:
-                print("Ошибка, нету такого номера комнаты")
-                print("Введите номер команты повторно...")
-
-        # Обрабатываем исключение с неверным воодом (например: буквы)        
-        except ValueError:
-            print("Введено недопустимое значение.")
-            print("Необходимо ввести цифру номера комнаты.") 
-
-    # Возвращаем ID выбранной комнаты
-    return(roomIdToGetMessages)
-
+    
 
 
 ##############     Часть 1      ##############
@@ -155,7 +137,42 @@ AccessTokenWebex = "Bearer " + AccessTokenWebex
 ##############     Часть 2      ##############
 # Webex просмотр комнат пользователя
 # Вызываем ф-цию для просмотра комнат webex (выбора или удаления) 
-roomIdToGetMessages = webexShowRooms()
+# Пользователь выбирает комнату из списка (в которой чат будет "прослушиваться")
+
+rooms = webexShowRooms()
+
+while True:
+    roomNumberToSearch = input("\nВыберите номер комнаты для работы скрипта: ") 
+
+    # Обработчик исключений, првоеряем правильность ввода ЦИФРЫ номера комнаты
+    try:
+        roomNumberToSearch = int(roomNumberToSearch)
+
+        # Проверяем на парвильность выбора комнаты (существует такой номер комнаты или нет)
+        if  roomNumberToSearch >= 0 and roomNumberToSearch < len(rooms):
+            # Сохраняем в переменную id выбранной команты (id нужен для запросов)
+            roomIdToGetMessages = rooms[roomNumberToSearch]["id"]
+            roomTitleToGetMessages = rooms[roomNumberToSearch]["title"]
+            print("Выбрана комната : " + roomTitleToGetMessages)
+            print("Id комнаты : " + roomIdToGetMessages + '\n')
+            break
+
+        # Создание новой комнаты
+        elif roomNumberToSearch == len(rooms):
+            print('Вы выбрали создание новой комнаты')
+            webexCreateRoom(input('Введите имя новой комнаты: '))
+            # Вызываем ф-цию для вывода нового списка комнат (после создания очередной комнаты)
+            rooms = webexShowRooms()
+
+        # Вариант с несуществующим номером комнаты
+        else:
+            print("Ошибка, нету такого номера комнаты")
+            print("Введите номер команты повторно...")
+
+    # Обрабатываем исключение с неверным воодом (например: буквы)        
+    except ValueError:
+        print("Введено недопустимое значение.")
+        print("Необходимо ввести цифру номера комнаты.") 
 
 
 
@@ -220,48 +237,39 @@ while True:
     people_name = people[0]['displayName']
 
     # Выводим в консоль последнее сообщение в чате комнаты
+    
     # Переменная для хранения текущей даты (времени)
     now = datetime.datetime.now()
     # Увеличиваем номер сообщений в логе
     log_count += 1
     # Строка с сообщением пользователя (выводим в консоль)
-    last_message  = f'[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадений не найдено'
-    print('\r', last_message, sep='', end='', flush=True)
+    last_message  = f'[{log_count}][{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}][сообщение] : \n{message}'
+    print(last_message)
 
- 
+
 
     ##############     Часть 4     ##############
     # Скрипт "прсолушивает" чат и находит совпадения сообщений
     
-    if message.find("/Help") == 0:
-        
-        # Строка с сообщением пользователя (выводим в консоль)
-        last_message  = f'\n[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадение: {message}\n'
-        print('\r', last_message, sep='', end='', flush=True)
+    if (message.lower()).find("/help") == 0:
 
         s1 = '***************************************'
         s2 = '/ISS -  Просмотр местоположения МКС'
         s3 = '/ISS_crew - Просмотр экипажа на МКС'
 
-        responseMessage = f'\n{s1}\n{s2}\n{s3}\n'
+        responseMessage = f'{s1}\n{s2}\n{s3}\n'
         # Ф-ция для запроса (post) на печать сообщения в чат
         webexCreateMessage(responseMessage)
 
-    elif message.find("/ISS_crew") == 0:
+    elif (message.lower()).find("/iss_crew") == 0:
 
         # Выполняем запрос к "open-notify" для получения списка экпижа на МКС
         r = requests.get(config.get('ISS', 'issUrlCrew'))
         json_data = r.json()['people']
 
-        # Строка с сообщением пользователя (выводим в консоль)
-        last_message  = f'\n[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадение: {message}\n'
-        print('\r', last_message, sep='', end='', flush=True)
-
         # Выводим в консоль ответ на запрос в удобном для чтения виде
-        print('\n==========================================================')
-        print('Запрос /ISS_crew')
-        print(json.dumps(json_data, indent=4))
-        print('==========================================================')
+        # Вызываем ф-цию для вывода сообщений в консоль
+        consoleMessage('Запрос /ISS_crew (список астронавтов)', json_data)
 
         # Проходим циклом по полученным сведениям и записываем всех членов экипажа в строку
         crew = ''
@@ -272,10 +280,7 @@ while True:
         webexCreateMessage('\nСколько людей сейчас находится в космосе?\n')
         webexCreateMessage(crew)
 
-    elif message.find("/ISS") == 0:
-        # Строка с сообщением пользователя (выводим в консоль)
-        last_message  = f'\n[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадение: {message}\n'
-        print('\r', last_message, sep='', end='', flush=True)
+    elif (message.lower()).find("/iss") == 0:
 
         # Ф-ция для запроса (post) на печать сообщения в чат
         webexCreateMessage('\nМКС движется со скоростью, близкой к 28 000 км / ч, поэтому ее местоположение меняется очень быстро! Где он находится прямо сейчас?')
@@ -287,10 +292,8 @@ while True:
         json_data = r.json()['iss_position']
 
         # Выводим в консоль ответ на запрос в удобном для чтения виде
-        print('\n==========================================================')
-        print('Запрос (получение координат) /ISS')
-        print(json.dumps(json_data, indent=4))
-        print('==========================================================')
+        # Вызываем ф-цию для вывода сообщений в консоль
+        consoleMessage('Запрос /ISS (получение координат)', json_data)
 
         # Записываем в переменную полученные координаты МКС
         coordinates_iss = f"{json_data['latitude']},{json_data['longitude']}"
@@ -310,10 +313,8 @@ while True:
         json_data = r.json()
 
         # Выводим в консоль ответ на запрос в удобном для чтения виде
-        print('\n==========================================================')
-        print('Запрос (получение расположения на местности) /ISS')
-        print(json.dumps(json_data, indent=4))
-        print('==========================================================')
+        # Вызываем ф-цию для вывода сообщений в консоль
+        consoleMessage('Запрос /ISS (получение расположения на местности)', json_data)
 
         # Записываем в переменную полученный ответ
         result = json_data['results'][0]
