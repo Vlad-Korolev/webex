@@ -14,6 +14,8 @@ import datetime
 config = ConfigParser() 
 # Считываем данные с файла конфигурации
 config.read('config.ini')
+# Объявляем переменную для подсчета номера сообщения в логе
+log_count = 0
 
 
 ##############     Функции     ##############
@@ -34,11 +36,101 @@ def webexCreateMessage(message):
           "text": message
     }
     # Запрос (post)
-    r = requests.post(config.get('WEBEX', 'webexUrlMessagesPost'), 
-                          data = json.dumps(PostData), 
-                              headers = HTTPHeaders
-    )
-  
+    r = requests.post(
+                       config.get('WEBEX', 'webexUrlMessagesPost'), 
+                       data = json.dumps(PostData), 
+                       headers = HTTPHeaders
+                     )
+
+def webexCreateRoom(title):
+    '''
+    Функция "webexCreateRoom(title)" создает новую комнату Webex
+        Ф-ция ожидает в качетстве аргумента имя новой комнаты
+    '''
+
+    # Параметры для запроса на создание новой комнаты
+    GetParameters = {
+                      "title": title
+                    }
+    # Заголовок запроса на создание новой комнаты
+    GetHeaders =    {
+                      "Authorization": AccessTokenWebex,
+                      "Content-Type": "application/json"
+                    }
+    # Запрос(post) создание новой комнаты Webex
+    r = requests.post( 
+                       config.get('WEBEX', 'webexurlcreateroom'), 
+                       headers = GetHeaders,
+                       json = GetParameters
+                     )
+    
+    # При возвращении кода отличного от "200" скрипт в консоль выводит сообщения об ошибке
+    if not r.status_code == 200:
+        raise Exception("Некорректный запрос к Webex Teams API (Создание комнаты). Статус код: {}. : {}".format(r.status_code, r.text))
+    
+    # Вызываем ф-цию для вывода нового списка комнат (после создания очередной комнаты)
+    webexShowRooms()
+
+def webexShowRooms():
+    '''
+    Функция "webexShowRooms()" проверят комнаты текущего пользователя, выводит их список, ждет выбора одной из комнат
+        Ф-ция возвращает "return(roomIdToGetMessages)" ID выбранной комнаты.
+    '''
+
+    # Запрос к API Webex для получения списка комнат
+    r = requests.get(   config.get('WEBEX', 'webexUrlRooms'),
+                        headers = {"Authorization": AccessTokenWebex}
+                    )
+
+    # При возвращении кода отличного от "200" скрипт в консоль выводит сообщения об ошибке
+    if not r.status_code == 200:
+        raise Exception("Некорректный запрос к Webex Teams API (Просмотр и выбор комнаты). Статус код: {}. Сообщение: {}".format(r.status_code, r.text))
+
+    # Выводим в консоль список комнат пользователя
+    print("\nКомнаты:")
+    rooms = r.json()["items"]
+
+    for i in range(len(rooms)):
+        print(i, '-', rooms[i]['title'])
+    else:
+        print('Всего комнат: ' + str(len(rooms)))
+        print('Для создания комнаты выберите номер:', len(rooms))
+    
+    # Пользователь выбирает комнату из списка (в которой чат будет "прослушиваться")
+    while True:
+        roomNumberToSearch = input("\nВыберите номер комнаты для работы скрипта: ") 
+
+        # Обработчик исключений, првоеряем правильность ввода ЦИФРЫ номера комнаты
+        try:
+            roomNumberToSearch = int(roomNumberToSearch)
+
+            # Проверяем на парвильность выбора комнаты (существует такой номер комнаты или нет)
+            if  roomNumberToSearch >= 0 and roomNumberToSearch < len(rooms):
+                # Сохраняем в переменную id выбранной команты (id нужен для запросов)
+                roomIdToGetMessages = rooms[roomNumberToSearch]["id"]
+                roomTitleToGetMessages = rooms[roomNumberToSearch]["title"]
+                print("Выбрана комната : " + roomTitleToGetMessages)
+                print("Id комнаты : " + roomIdToGetMessages + '\n')
+                break
+
+            # Создание новой комнаты
+            elif roomNumberToSearch == len(rooms):
+                print('Вы выбрали создание новой комнаты')
+                webexCreateRoom(input('Введите имя новой комнаты: '))
+
+            # Вариант с несуществующим номером комнаты
+            else:
+                print("Ошибка, нету такого номера комнаты")
+                print("Введите номер команты повторно...")
+
+        # Обрабатываем исключение с неверным воодом (например: буквы)        
+        except ValueError:
+            print("Введено недопустимое значение.")
+            print("Необходимо ввести цифру номера комнаты.") 
+
+    # Возвращаем ID выбранной комнаты
+    return(roomIdToGetMessages)
+
 
 
 ##############     Часть 1      ##############
@@ -62,46 +154,9 @@ AccessTokenWebex = "Bearer " + AccessTokenWebex
 
 ##############     Часть 2      ##############
 # Webex просмотр комнат пользователя
-# Запрос к API Webex для получения списка комнат
-r = requests.get(   config.get('WEBEX', 'webexUrlRooms'),
-                    headers = {"Authorization": AccessTokenWebex}
-                )
+# Вызываем ф-цию для просмотра комнат webex (выбора или удаления) 
+roomIdToGetMessages = webexShowRooms()
 
-# При возвращении кода отличного от "200" скрипт в консоль выводит сообщения об ошибке
-if not r.status_code == 200:
-    raise Exception("Некорректный запрос к Webex Teams API. Статус код: {}. Сообщение: {}".format(r.status_code, r.text))
-
-# Выводим в консоль список комнат пользователя
-print("\nКомнаты:")
-rooms = r.json()["items"]
-
-for i in range(len(rooms)):
-    print(i, '-', rooms[i]['title'])
-else:
-    print('Всего комнат: ' + str(len(rooms)))
-
-# Пользователь выбирает комнату из списка (в которой чат будет "прослушиваться")
-while True:
-    roomNumberToSearch = input("\nВыберите номер комнаты для работы скрипта: ") 
-    # Обработчик исключений, првоеряем правильность ввода ЦИФРЫ номера комнаты
-    try:
-        roomNumberToSearch = int(roomNumberToSearch)
-        # Проверяем на парвильность выбора комнаты (существует такой номер комнаты или нет)
-        if  roomNumberToSearch >= 0 and roomNumberToSearch < len(rooms):
-            # Сохраняем в переменную id выбранной команты (id нужен для запросов)
-            roomIdToGetMessages = rooms[roomNumberToSearch]["id"]
-            roomTitleToGetMessages = rooms[roomNumberToSearch]["title"]
-            print("Выбрана комната : " + roomTitleToGetMessages)
-            print("Id комнаты : " + roomIdToGetMessages + '\n')
-            break
-        # Вариант с несуществующим номером комнаты
-        else:
-            print("Ошибка, нету такого номера комнаты")
-            print("Введите номер команты повторно...")
-    # Обрабатываем исключение с неверным воодом (например: буквы)        
-    except ValueError:
-        print("Введено недопустимое значение.")
-        print("Необходимо ввести цифру номера комнаты.") 
 
 
 
@@ -167,8 +222,10 @@ while True:
     # Выводим в консоль последнее сообщение в чате комнаты
     # Переменная для хранения текущей даты (времени)
     now = datetime.datetime.now()
+    # Увеличиваем номер сообщений в логе
+    log_count += 1
     # Строка с сообщением
-    last_message  = f'[{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] сообщение:\n{message}' 
+    last_message  = f'[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : {message}' 
     print(last_message)
 
  
@@ -179,7 +236,7 @@ while True:
     if message.find("/Help") == 0:
 
         s1 = '***************************************'
-        s2 = '/ISS - Просмотр местоположения МКС'
+        s2 = '/ISS -  Просмотр местоположения МКС'
         s3 = '/ISS_crew - Просмотр экипажа на МКС'
 
         responseMessage = f'\n{s1}\n{s2}\n{s3}\n'
@@ -198,7 +255,7 @@ while True:
             crew = crew + json_data[crew_numb]['name'] + '\n'
 
         # Ф-ция для запроса (post) на печать сообщения в чат
-        webexCreateMessage('Сколько людей сейчас находится в космосе?\n')
+        webexCreateMessage('\nСколько людей сейчас находится в космосе?\n')
         webexCreateMessage(crew)
 
     elif message.find("/ISS") == 0:
@@ -230,6 +287,7 @@ while True:
         result = json_data['results'][0]
         # Записываем в переменную категорию (от нее зависят возвращаемые данные)
         opencagedata_category = result['components']['_category']
+       
 
         # Выстраиваем сообщения ответа в зависимости от категории "opencagedata_category"
         if opencagedata_category == 'road' or opencagedata_category == 'place':
@@ -237,20 +295,18 @@ while True:
             # Записываем в переменные нужные нам значения
             opencagedata_continent    = result['components']['continent']
             opencagedata_country      = result['components']['country']
-            opencagedata_county       = result['components']['county']
             opencagedata_state        = result['components']['state']
-            opencagedata_village      = result['components']['village']
+            opencagedata_osm          = result['annotations']['OSM']['url']
 
             # Подгатавливаем сообщения для отправки в чат комнаты
             s1 = f'Координаты МКС: {coordinates_iss}'
             s2 = '***************************************'
             s3 = f'Континент:      {opencagedata_continent}'
             s4 = f'Страна:         {opencagedata_country}'
-            s5 = f'Округ:          {opencagedata_county}'
-            s6 = f'Область:        {opencagedata_state}'
-            s7 = f'Город:          {opencagedata_village}'
+            s5 = f'Область:        {opencagedata_state}'
+            s6 = f'\nПросмотр на карте: \n{opencagedata_osm}'
 
-            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}\n{s6}\n{s7}\n'
+            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}\n{s6}\n'
             # Ф-ция для запроса (post) на печать сообщения в чат
             webexCreateMessage(responseMessage)
             
@@ -258,18 +314,21 @@ while True:
             
             # Записываем в переменные нужные нам значения
             opencagedata_water = result['components']['body_of_water']
+            opencagedata_osm   = result['annotations']['OSM']['url']
 
             # Подгатавливаем сообщения для отправки в чат комнаты
             s1 = f'Координаты МКС: {coordinates_iss}'
             s2 = '***************************************'
             s3 = f'Нейтралные территории (вода)'
             s4 = f'Местоположение: { opencagedata_water}'
+            s5 = f'\nПросмотр на карте: \n{opencagedata_osm}'
 
-            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n'
+            responseMessage = f'\n{s1}\n{s2}\n{s3}\n{s4}\n{s5}\n'
             # Ф-ция для запроса (post) на печать сообщения в чат
             webexCreateMessage(responseMessage)
             
         else:
+            # Ф-ция для запроса (post) на печать сообщения в чат
             webexCreateMessage('Неизвестная категория (opencagedata_category)')
             webexCreateMessage(opencagedata_category)
             webexCreateMessage(coordinates_iss)
