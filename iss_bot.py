@@ -224,9 +224,9 @@ while True:
     now = datetime.datetime.now()
     # Увеличиваем номер сообщений в логе
     log_count += 1
-    # Строка с сообщением
-    last_message  = f'[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}]: {message}' 
-    print(last_message)
+    # Строка с сообщением пользователя (выводим в консоль)
+    last_message  = f'[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадений не найдено'
+    print('\r', last_message, sep='', end='', flush=True)
 
  
 
@@ -234,6 +234,10 @@ while True:
     # Скрипт "прсолушивает" чат и находит совпадения сообщений
     
     if message.find("/Help") == 0:
+        
+        # Строка с сообщением пользователя (выводим в консоль)
+        last_message  = f'\n[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадение: {message}\n'
+        print('\r', last_message, sep='', end='', flush=True)
 
         s1 = '***************************************'
         s2 = '/ISS -  Просмотр местоположения МКС'
@@ -249,6 +253,16 @@ while True:
         r = requests.get(config.get('ISS', 'issUrlCrew'))
         json_data = r.json()['people']
 
+        # Строка с сообщением пользователя (выводим в консоль)
+        last_message  = f'\n[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадение: {message}\n'
+        print('\r', last_message, sep='', end='', flush=True)
+
+        # Выводим в консоль ответ на запрос в удобном для чтения виде
+        print('\n==========================================================')
+        print('Запрос /ISS_crew')
+        print(json.dumps(json_data, indent=4))
+        print('==========================================================')
+
         # Проходим циклом по полученным сведениям и записываем всех членов экипажа в строку
         crew = ''
         for crew_numb in range(len(json_data)):
@@ -259,6 +273,10 @@ while True:
         webexCreateMessage(crew)
 
     elif message.find("/ISS") == 0:
+        # Строка с сообщением пользователя (выводим в консоль)
+        last_message  = f'\n[{log_count}] [{now.strftime("%d-%m-%Y %H:%M:%S")}] от [{people_name}] : Совпадение: {message}\n'
+        print('\r', last_message, sep='', end='', flush=True)
+
         # Ф-ция для запроса (post) на печать сообщения в чат
         webexCreateMessage('\nМКС движется со скоростью, близкой к 28 000 км / ч, поэтому ее местоположение меняется очень быстро! Где он находится прямо сейчас?')
 
@@ -267,6 +285,13 @@ while True:
 
         # Преобразуем полученный ответ к удобному отображению
         json_data = r.json()['iss_position']
+
+        # Выводим в консоль ответ на запрос в удобном для чтения виде
+        print('\n==========================================================')
+        print('Запрос (получение координат) /ISS')
+        print(json.dumps(json_data, indent=4))
+        print('==========================================================')
+
         # Записываем в переменную полученные координаты МКС
         coordinates_iss = f"{json_data['latitude']},{json_data['longitude']}"
 
@@ -283,6 +308,13 @@ while True:
 
         # Преобразуем полученный ответ к удобному отображению
         json_data = r.json()
+
+        # Выводим в консоль ответ на запрос в удобном для чтения виде
+        print('\n==========================================================')
+        print('Запрос (получение расположения на местности) /ISS')
+        print(json.dumps(json_data, indent=4))
+        print('==========================================================')
+
         # Записываем в переменную полученный ответ
         result = json_data['results'][0]
         # Записываем в переменную категорию (от нее зависят возвращаемые данные)
